@@ -1,13 +1,14 @@
 # Simple RenPy Translator
 
-A lightweight and easy-to-use tool for translating RenPy games.
+A lightweight and easy-to-use command line tool for translating RenPy games.
 
 ## Features
 
 - **Simple**: Minimal dependencies, easy installation
 - **Fast**: Quick text extraction and translation processing
 - **Compatible**: Works with Python 3.13+ and all major platforms
-- **Flexible**: Support for HTML export/import for translation
+- **Flexible**: Support for HTML and JSON export/import formats
+- **Command Line**: Full command line interface with subcommands
 
 ## Installation
 
@@ -16,12 +17,10 @@ A lightweight and easy-to-use tool for translating RenPy games.
    ```bash
    pip install -r requirements.txt
    ```
-3. Run the tool:
-   ```bash
-   python main.py --help
-   ```
 
 ## Quick Start
+
+### Using the Command Line Tool
 
 1. Initialize a new translation project:
    ```bash
@@ -33,12 +32,12 @@ A lightweight and easy-to-use tool for translating RenPy games.
    python main.py scan my_project -l zh
    ```
 
-3. Export text for translation:
+3. Export text for translation (HTML format):
    ```bash
    python main.py export my_project -l zh -f html
    ```
 
-4. Import translated text:
+4. Import translated text (HTML format):
    ```bash
    python main.py import my_project -l zh -f html translation.html
    ```
@@ -48,7 +47,19 @@ A lightweight and easy-to-use tool for translating RenPy games.
    python main.py generate my_project -l zh
    ```
 
-## Commands
+### Using JSON Format (Alternative Workflow)
+
+1. Extract original text to JSON:
+   ```bash
+   python extractor.py
+   ```
+
+2. After translation, inject translations back:
+   ```bash
+   python injector.py -i translated.json
+   ```
+
+## Available Commands
 
 - `init` - Initialize a new translation project
 - `list` - List existing projects  
