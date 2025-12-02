@@ -1,0 +1,15 @@
+# Simple RenPy Translator - Minimal Dependencies
+# Python 3.13+ compatible
+
+# Core dependencies for file processing and translation
+openpyxl>=3.1.0          # Excel file handling (for future Excel support)
+PyYAML>=6.0.0           # Configuration files
+tqdm>=4.66.0            # Progress bars
+colorama>=0.4.6         # Terminal colors
+
+# Note: We use standard library for:
+# - argparse (CLI)
+# - html.parser (HTML parsing)
+# - json (configuration)
+# - pathlib (file operations)
+# - re (regular expressions)
