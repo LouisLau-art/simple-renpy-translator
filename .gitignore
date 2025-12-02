@@ -11,3 +11,7 @@ game/cache/
 game/saves/
 **/*.rpyc
 **/*.rpyb
+# Translation backups
+*.backup
+*.backup.*
+translated.json.backup.*

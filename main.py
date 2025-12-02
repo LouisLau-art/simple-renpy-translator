@@ -54,7 +54,7 @@ def create_argument_parser():
     export_parser = subparsers.add_parser('export', help='Export text for translation')
     export_parser.add_argument('project', help='Project name or path')
     export_parser.add_argument('-l', '--lang', required=True, help='Target language code')
-    export_parser.add_argument('-f', '--format', choices=['html'], default='html', help='Export format')
+    export_parser.add_argument('-f', '--format', choices=['html', 'json'], default='html', help='Export format')
     export_parser.add_argument('-o', '--output', help='Output file path')
     
     # import command
