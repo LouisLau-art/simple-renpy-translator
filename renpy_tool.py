@@ -351,7 +351,7 @@ class RenPyInjector:
                 continue
             
             rel_path = source_file
-            target_path = os.path.join(BASE_DIR, "tl", language, rel_path)
+            target_path = os.path.join(BASE_DIR, "game", "tl", language, rel_path)
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
             
             translation_file_path = Path(target_path)
