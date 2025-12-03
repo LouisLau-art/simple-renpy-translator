@@ -46,7 +46,7 @@ def write_text_file(file_path: Path, content: str, encoding: str = 'utf-8') -> b
     except Exception:
         return False
 
-def save_json_file(file_path: Path, data: Dict[str, Any]) -> bool:
+def save_json_file(file_path: Path, data: Any) -> bool:
     """保存JSON文件"""
     try:
         content = json.dumps(data, indent=2, ensure_ascii=False)
@@ -90,16 +90,15 @@ class RenPyExtractor:
             if file_path.name.startswith(prefix):
                 return True
         
-        # 使用 os.walk 兼容的方法计算相对路径
         try:
             relative_path = file_path.relative_to(game_dir)
             for part in relative_path.parts:
                 if part in self.DIRECTORY_BLACKLIST:
                     return True
-    except ValueError:
-        return True
-    
-    return False
+        except ValueError:
+            return True
+        
+        return False
     
     def extract_from_game_directory(self, game_dir: Path = Path("game")) -> List[Dict[str, Any]]:
         """从game目录提取文本并注入ID"""
@@ -109,10 +108,9 @@ class RenPyExtractor:
             return []
         
         extracted_texts = []
+        BASE_DIR = str(game_dir)
         
-        # 使用 os.walk 进行遍历，确保正确的相对路径计算
         for root, dirs, files in os.walk(str(game_dir)):
-            # 在遍历时跳过黑名单目录
             dirs[:] = [d for d in dirs if d not in self.DIRECTORY_BLACKLIST]
             dirs[:] = [d for d in dirs if not d.startswith('_') and not d.startswith('.')]
             
@@ -133,37 +131,39 @@ class RenPyExtractor:
                 modified = False
                 
                 for line_num, line in enumerate(lines, 1):
+                    # --- 【修改开始】 ---
                     if self._should_ignore_line(line):
                         continue
+                        
+                    # 关键修复：如果是代码行，直接跳过，看都不看
+                    if self._is_code_line(line):
+                        continue
+                    # --- 【修改结束】 ---
                     
-                    # 提取引号内文本
                     pattern = r'"([^"]*)"'
                     for match in re.finditer(pattern, line):
                         text = match.group(1).strip()
                         if self._is_translatable_text(text):
                             text_id = self._generate_id(file_path, line_num, text)
                             
-                            # 检查并注入ID
                             if not self._has_id(line):
                                 new_line = self._add_id_to_line(line, text_id)
                                 if new_line != line:
                                     modified_lines[line_num-1] = new_line
                                 modified = True
                             
-                            # 计算正确的相对路径
-                            relative_path = file_path.relative_to(game_dir).as_posix()
+                            full_file_path = str(file_path)
+                            rel_path = os.path.relpath(full_file_path, BASE_DIR)
                             
-                            # 创建文本条目
                             text_entry = {
                                 "id": text_id,
-                                "file": relative_path,
+                                "file": rel_path,
                                 "line": line_num,
                                 "original": text,
                                 "translated": None
                             }
                             extracted_texts.append(text_entry)
                 
-                # 如果有修改，写回文件
                 if modified:
                     write_text_file(file_path, ''.join(modified_lines))
         
@@ -171,80 +171,67 @@ class RenPyExtractor:
         print(f"✅ 提取完成，共找到 {len(self.extracted_texts)} 个可翻译文本")
         return self.extracted_texts
     
-    def _extract_from_file(self, file_path: Path) -> None:
-        """从单个文件提取文本并注入ID"""
-        content = read_text_file(file_path)
-        if not content:
-            return
-        
-        lines = content.splitlines(keepends=True)
-        modified_lines = lines.copy()
-        modified = False
-        
-        for line_num, line in enumerate(lines, 1):
-            if self._should_ignore_line(line):
-                continue
-            
-            # 提取引号内文本
-            pattern = r'"([^"]*)"'
-            for match in re.finditer(pattern, line):
-                text = match.group(1).strip()
-                if self._is_translatable_text(text):
-                    text_id = self._generate_id(file_path, line_num, text)
-                    
-                    # 检查并注入ID
-                    if not self._has_id(line):
-                        new_line = self._add_id_to_line(line, text_id)
-                        if new_line != line:
-                            modified_lines[line_num-1] = new_line
-                        modified = True
-                
-                # 创建文本条目
-                text_entry = {
-                    "id": text_id,
-                    "file": str(file_path.relative_to(self.game_dir)),
-                    "line": line_num,
-                    "original": text,
-                    "translated": None
-                }
-                self.extracted_texts.append(text_entry)
-        
-        # 如果有修改，写回文件
-        if modified:
-            write_text_file(file_path, ''.join(modified_lines))
-    
     def _should_ignore_line(self, line: str) -> bool:
         """检查是否忽略该行"""
-        stripped_line = line.strip()
         for pattern in self.IGNORE_PATTERNS:
             if pattern.match(line):
                 return True
         return False
     
     def _is_translatable_text(self, text: str) -> bool:
-        """判断文本是否需要翻译"""
-        cleaned_text = text.strip().strip('"\'')
-        if len(cleaned_text) < 2:
-            return False
-        
-        # 任务要求的过滤规则
-        if '_' in cleaned_text:
-            return False
-        if '-' in cleaned_text and ' ' not in cleaned_text:
-            return False
-        if cleaned_text.isdigit() or (len(cleaned_text) > 2 and cleaned_text[0] == '0' and cleaned_text[1:].isdigit()):
-            return False
-        
-        # 基本过滤
-        if cleaned_text.startswith(('$', '{', '[')) or '{' in cleaned_text:
-            return False
-        if len(cleaned_text.split()) == 1 and re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', cleaned_text):
-            return False
-        if not any(c.isalpha() for c in cleaned_text):
-            return False
-        
-        return True
-    
+            """判断文本是否需要翻译"""
+            cleaned_text = text.strip().strip('"\'')
+            if len(cleaned_text) < 2:
+                return False
+            
+            # 1. 基础黑名单符号 (只保留真正危险的)
+            # 我们【移除】了 [ ] { }，因为剧情里全是这些
+            # 我们保留 \ (反斜杠)，因为转义符容易出错
+            # 我们保留 < > (HTML标签)，RenPy里少见但最好防一手
+            unsafe_symbols = {'\\', '<', '>'} 
+            if any(s in cleaned_text for s in unsafe_symbols):
+                return False
+                
+            # 2. 颜色代码检查 (#开头且无空格)
+            if cleaned_text.startswith('#') and ' ' not in cleaned_text:
+                return False
+
+            # 3. 之前的规则 (下划线, 纯数字等)
+            if '_' in cleaned_text:
+                return False
+            if '-' in cleaned_text and ' ' not in cleaned_text:
+                return False
+            if cleaned_text.isdigit() or (len(cleaned_text) > 2 and cleaned_text[0] == '0' and cleaned_text[1:].isdigit()):
+                return False
+            
+            # 4. 文件扩展名检查
+            extensions = ('.png', '.jpg', '.jpeg', '.webp', '.ogg', '.mp3', '.wav', '.ttf', '.otf', '.rpy', '.txt')
+            if cleaned_text.lower().endswith(extensions):
+                return False
+                
+            # 5. 路径检查
+            if "/" in cleaned_text:
+                # 允许 "he/she" 这种文本，但过滤 "images/bg.png"
+                if any(x in cleaned_text.lower() for x in ['images/', 'gui/', 'audio/', 'fonts/', 'music/', 'sound/']):
+                    return False
+                if " " not in cleaned_text: # 没有空格的路径
+                    return False
+            
+            # 6. 变量/命令检查
+            if cleaned_text.startswith(('$', 'call ', 'jump ')):
+                return False
+            
+            # 7. 纯字母单词检查 (避免把变量名当文本)
+            # 只有当它是一个单词，且全是字母数字下划线时才过滤
+            # "Hello" -> 保留
+            # "player_name" -> 过滤 (上面 _ 规则已涵盖，这里是双保险)
+            if ' ' not in cleaned_text and not any(c in cleaned_text for c in ',.!?'):
+                # 简单的启发式：如果是纯小写单词，很可能是变量，跳过
+                # 如果首字母大写，可能是短语 "Stop"，保留
+                if cleaned_text.islower() and cleaned_text.isalnum():
+                    return False
+
+            return True    
     def _generate_id(self, file_path: Path, line_num: int, text: str) -> str:
         """生成唯一ID"""
         content = f"{file_path.name}_{line_num}_{text[:20]}"
@@ -257,15 +244,50 @@ class RenPyExtractor:
     def _add_id_to_line(self, line: str, text_id: str) -> str:
         """为行添加ID"""
         stripped_line = line.rstrip()
+        
         if re.search(r'^\s*[a-zA-Z_][a-zA-Z0-9_]*\s+"', stripped_line):
-            # 对话行
+            return stripped_line + f' id {text_id}\n'
+        elif re.search(r'^\s*"', stripped_line):
             return stripped_line + f' id {text_id}\n'
         elif re.search(r'^\s*show\s+', stripped_line):
-            # show语句
             return stripped_line + f' id {text_id}\n'
         else:
-            # 其他情况
             return stripped_line + f' # id {text_id}\n'
+
+    def _is_code_line(self, line: str) -> bool:
+        """判断是否为代码行（不应添加ID或翻译）"""
+        stripped = line.strip()
+        
+        # 1. 关键字黑名单 (这些开头的绝对不是对话)
+        # 注意：包含 image, define, style, 以及 screens.rpy 里常见的属性
+        forbidden_keywords = (
+            "image", "define", "default", "style", "transform",
+            "play", "stop", "queue", "scene", "show", "hide", "with",
+            "hover", "idle", "ground", "selected", "hotspot", "hotbar",
+            "xpos", "ypos", "xanchor", "yanchor", "xalign", "yalign",
+            "action", "font", "color", "size", "background",
+            "activate_sound", "hover_sound", "music", "sound", "voice",
+            "jump", "call", "return", "pass", "label", "menu:",
+            "textbutton", "imagebutton", "vbar", "hbar", "bar",
+            "viewport", "vbox", "hbox", "grid", "frame", "window",
+            "$", "python", "init", "text"
+        )
+        
+        # 检查是否以关键字开头
+        for kw in forbidden_keywords:
+            if stripped.startswith(kw + " ") or stripped == kw:
+                return True
+                
+        # 2. 检查是否包含路径特征 (images/, audio/, gui/)
+        if any(x in line for x in ["images/", "audio/", "gui/", "fonts/"]):
+            return True
+            
+        # 3. 检查是否是赋值语句 ( = )
+        if "=" in line and not line.startswith('"'):
+            # 排除 config.version = "1.0" 这种
+            return True
+
+        return False
 
 # ======================
 # RenPyInjector 类
@@ -303,11 +325,7 @@ class RenPyInjector:
     
     def inject_translations(self, language: str, game_dir: Path) -> bool:
         """注入翻译文件"""
-        tl_dir = game_dir / "tl" / language
-        tl_dir.mkdir(parents=True, exist_ok=True)
-        
-        # 确保不处理 tl 目录本身
-        if str(tl_dir) in str(game_dir):
+        if str(game_dir / "tl") in str(game_dir):
             print("❌ 错误: 不能在 tl 目录中操作")
             return False
         
@@ -319,8 +337,8 @@ class RenPyInjector:
             return False
         
         generated_files = 0
+        BASE_DIR = str(game_dir)
         
-        # 按文件分组翻译数据
         translations_by_file = {}
         for translation in translated_entries:
             file_path = translation.get('file', '')
@@ -332,12 +350,11 @@ class RenPyInjector:
             if not file_translations:
                 continue
             
-            # 计算正确的目标路径 - 镜像原始目录结构
-            # 确保 source_file 是相对于 game_dir 的路径
-            source_file_path = Path(source_file)
-            # 创建目标路径
-            translation_file_path = tl_dir / source_file_path
+            rel_path = source_file
+            target_path = os.path.join(BASE_DIR, "tl", language, rel_path)
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
             
+            translation_file_path = Path(target_path)
             if self._generate_translation_file(translation_file_path, file_translations, language):
                 generated_files += 1
         
@@ -384,12 +401,10 @@ def main():
     parser = argparse.ArgumentParser(description="RenPy 工具：单文件翻译提取与注入")
     subparsers = parser.add_subparsers(dest="command", required=True)
     
-    # extract 命令
     extract_parser = subparsers.add_parser("extract", help="提取可翻译文本")
     extract_parser.add_argument("-g", "--game-dir", type=str, help="游戏目录", default="game")
     extract_parser.add_argument("-o", "--output", type=str, help="输出JSON文件", default="translation_work.json")
     
-    # inject 命令
     inject_parser = subparsers.add_parser("inject", help="注入翻译文件")
     inject_parser.add_argument("-i", "--input", type=str, help="输入JSON文件", default="translation_work.json")
     inject_parser.add_argument("-g", "--game-dir", type=str, help="游戏目录", default="game")
